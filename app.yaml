@@ -9,7 +9,11 @@ handlers:       # static then dynamic
 - url: /tasks/send_confirmation_email
   script: main.app
   login: admin
-  
+
+- url: /tasks/add_new_speaker
+  script: main.app
+  login: admin
+
 - url: /favicon\.ico
   static_files: favicon.ico
   upload: favicon\.ico

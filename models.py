@@ -112,13 +112,13 @@ class StringMessage(messages.Message):
 
 class Session(ndb.Model):
     """Session -- Conference session object"""
-    sessionName             = ndb.StringProperty()
+    sessionName             = ndb.StringProperty(required=True)
     highlights              = ndb.StringProperty()
-    speaker                 = ndb.StringProperty()
+    speaker                 = ndb.StringProperty(required=True)
     duration                = ndb.IntegerProperty()
     typeOfSession           = ndb.StringProperty()
     date                    = ndb.StringProperty()
-    start_time              = ndb.TimeProperty()
+    start_time              = ndb.DateTimeProperty()
     conf_id                 = ndb.StringProperty()
 
 class SessionForm(messages.Message):
@@ -129,7 +129,7 @@ class SessionForm(messages.Message):
     duration                = messages.IntegerField(4)
     typeOfSession           = messages.StringField(5)
     date                    = messages.StringField(6)
-    start_time              = messages.IntegerField(7)
+    start_time              = messages.StringField(7)
     conf_id                 = messages.StringField(8)
     websafeConferenceKey    = messages.StringField(9)
     websafeKey              = messages.StringField(10)
