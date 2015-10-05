@@ -117,7 +117,7 @@ class Session(ndb.Model):
     speaker                 = ndb.StringProperty(required=True)
     duration                = ndb.IntegerProperty()
     typeOfSession           = ndb.StringProperty()
-    date                    = ndb.StringProperty()
+    date                    = ndb.DateProperty()
     start_time              = ndb.TimeProperty()
     conf_id                 = ndb.StringProperty()
 

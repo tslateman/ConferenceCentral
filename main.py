@@ -39,7 +39,6 @@ class SendConfirmationEmailHandler(webapp2.RequestHandler):
 class AddNewSpeakerHandler(webapp2.RequestHandler):
     """Add new speaker to Featured Speakers"""
     def post(self):
-        #speaker self.request.get('speaker')
         ConferenceApi._updateFeaturedSpeaker(self.request)
         
 
