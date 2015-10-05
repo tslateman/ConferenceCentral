@@ -4,13 +4,15 @@
 conference.py -- Udacity conference server-side Python App Engine API;
     uses Google Cloud Endpoints
 
-$Id: conference.py,v 1.25 2014/05/24 23:42:19 wesc Exp wesc $
+$Id: conference.py,v 1.25 
 
-created by wesc on 2014 apr 21
+Template code provided by Udacity
+
+Modified and added to by Thomas Slater
 
 """
 
-__author__ = 'wesc+api@google.com (Wesley Chun)'
+__author__ = 't.r.slater@gmail.com (Thomas Slater)'
 
 
 from datetime import datetime
@@ -172,7 +174,7 @@ class ConferenceApi(remote.Service):
         data['key'] = c_key
         data['organizerUserId'] = request.organizerUserId = user_id
 
-        # TODO 2: add confirmation email sending task to queue
+        # Adds confirmation email sending task to queue
         # create Conference, send email to organizer confirming
         # creation of Conference & return (modified) ConferenceForm
         Conference(**data).put()
@@ -548,7 +550,6 @@ class ConferenceApi(remote.Service):
             http_method='GET', name='getAnnouncement')
     def getAnnouncement(self, request):
         """Return Announcement from memcache."""
-        # TODO 1
         # return an existing announcement from Memcache or an empty string.
         # announcement = self._cacheAnnouncement()
         announcement = memcache.get(MEMCACHE_ANNOUNCEMENTS_KEY)
@@ -557,6 +558,7 @@ class ConferenceApi(remote.Service):
         return StringMessage(data=announcement)
 
 # - - - Featured Speaker - - - - - - - - - - - - - - - -
+
 
     @staticmethod
     def _updateFeaturedSpeaker(request):
@@ -592,7 +594,6 @@ class ConferenceApi(remote.Service):
         return StringMessage(data=speaker)
 
 
-
 # - - - Sessions - - - - - - - - - - - - - - - - - - - -
 
 
@@ -609,6 +610,7 @@ class ConferenceApi(remote.Service):
         return SessionForms(
             items=[self._copySessionToForm(session) for session in sessions]
         )
+
 
     def _copySessionToForm(self, sesh):
         """Copy relevant fields from Session to SessionForm."""
@@ -631,7 +633,8 @@ class ConferenceApi(remote.Service):
     @endpoints.method(SessionForm, SessionForm, path='session', 
             http_method='POST', name='createSession')
     def createSession(self, request):
-        """ open only to the organizer of the conference """
+        """Creates a session for a conference. 
+        Open only to the organizer of the conference """
         user = endpoints.get_current_user()
         if not user:
             raise endpoints.UnauthorizedException('Authorization required')
@@ -652,7 +655,10 @@ class ConferenceApi(remote.Service):
         data['conf_id'] = request.websafeConferenceKey  
 
         if data['start_time']:
-            data['start_time'] = datetime.strptime(data['start_time'], "%H:%M")
+            data['start_time'] = datetime.strptime(data['start_time'], "%H:%M").time()
+            
+        if data['date']:
+            data['date'] = datetime.strptime(data['startDate'][:10], "%Y-%m-%d").date()
 
         Session(**data).put()
 
@@ -670,7 +676,7 @@ class ConferenceApi(remote.Service):
             path='sessionsbytype',
             http_method='GET', name='getSessionsByType')
     def getConferenceSessionsByType(self, request):
-        """ Given a conference, return all sessions of a specified type 
+        """Given a conference, return all sessions of a specified type 
         (eg lecture, keynote, workshop)"""
 
         confKey = ndb.Key(urlsafe=request.websafeConferenceKey)
@@ -682,6 +688,7 @@ class ConferenceApi(remote.Service):
         return SessionForms(
             items=[self._copySessionToForm(session) for session in sessions]
         )
+
     
     @endpoints.method(SESS_GET_REQUEST, SessionForms,
             path='getSessionsBySpeaker',
@@ -737,6 +744,7 @@ class ConferenceApi(remote.Service):
         session.put()
         return BooleanMessage(data=retval)
 
+
     @endpoints.method(WISH_GET_REQUEST, BooleanMessage,
             path='session/{SessionKey}',
             http_method='POST', name='addSessionToWishlist')
@@ -767,17 +775,58 @@ class ConferenceApi(remote.Service):
             items=[self._copySessionToForm(session) for session in sessions]
         )
 
-    @endpoints.method(message_types.VoidMessage, SessionForms,
-        path = 'sessionPlayground', http_method='GET', name='sessionPlayground')
-    def sessionPlayground(self, request):
-        q = Session.query()
-        q = q.filter(Session.typeOfSession != "workshop")
-        q = q.filter(Session.speaker != "bob")
-        q = q.filter(Session.sessionName != "Art")
-        # q = q.filter(Session.start_time.hour > 19)
 
-        return SessionForms(
-            items=[self._copySessionToForm(session) for session in q]
-        )
+    @endpoints.method(message_types.VoidMessage, SessionForms,
+        path = 'lateNonWorkshopQuery', http_method='GET', 
+        name='lateNonWorkshopQuery')
+    def lateNonWorkshopQuery(self, request):
+        """Get all non-workshop sessions starting after 7 pm"""
+        q1 = Session.query()
+        q1 = q1.filter(Session.typeOfSession != "workshop")
+
+        comp_time = datetime.strptime('19', '%H').time()
+        q2 = Session.query().filter(Session.start_time > comp_time)
+
+        items = []
+        for s1 in q1:
+            for s2 in q2:
+                if s1 == s2:
+                    items.append(self._copySessionToForm(s1))
+        return SessionForms(items=items)
+
+
+    @endpoints.method(message_types.VoidMessage, SessionForms,
+        path = 'earlyNonBobQuery', http_method='GET', name='earlyNonBobQuery')
+    def earlyNonBobQuery(self, request):
+        """Get all non-bob speaker sessions starting before 2pm"""
+        q1 = Session.query()
+        q1 = q1.filter(Session.speaker != "Bob")
+        comp_time = datetime.strptime('14', '%H').time()
+        q2 = Session.query().filter(Session.start_time < comp_time)
+
+        items = []
+        for s1 in q1:
+            for s2 in q2:
+                if s1 == s2:
+                    items.append(self._copySessionToForm(s1))
+        return SessionForms(items=items)
+
+
+    @endpoints.method(message_types.VoidMessage, SessionForms,
+        path = 'nonTimeAndNonSpeakerJoeQuery', http_method='GET', 
+        name='nonTimeAndNonSpeakerJoe')
+    def nonTimeAndNonSpeakerJoe(self, request):
+        """Get all sessions not named time and not by Speaker Joe"""
+        q1 = Session.query()
+        q1 = q1.filter(Session.sessionName != "Time")
+        q2 = Session.query().filter(Session.speaker != "Speaker Joe")
+
+        items = []
+        for s1 in q1:
+            for s2 in q2:
+                if s1 == s2:
+                    items.append(self._copySessionToForm(s1))
+        return SessionForms(items=items)
+
 
 api = endpoints.api_server([ConferenceApi]) # register API
