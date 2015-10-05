@@ -1,5 +1,3 @@
-Initial README
-
 Conference application for the Udacity building scalable apps course.
 
 Uses app engine to run a conference application for users to browse
