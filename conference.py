@@ -25,7 +25,6 @@ from protorpc import remote
 from google.appengine.api import memcache
 from google.appengine.api import taskqueue
 from google.appengine.ext import ndb
-from google.appengine.api import memcache
 
 from models import StringMessage
 from models import ConflictException
@@ -103,6 +102,17 @@ WISH_GET_REQUEST = endpoints.ResourceContainer(
     message_types.VoidMessage,
     SessionKey = messages.StringField(1)
 )
+
+SPECIAL_QUERY1_REQUEST = endpoints.ResourceContainer(
+    message_types.VoidMessage,
+    speaker = messages.StringField(1)
+)
+
+SPECIAL_QUERY2_REQUEST = endpoints.ResourceContainer(
+    message_types.VoidMessage,
+    typeOfSession = messages.StringField(1)
+)
+
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
@@ -573,13 +583,19 @@ class ConferenceApi(remote.Service):
 
         sessions = Session.query(ancestor=confKey)
 
-        # check conf sessions for same speaker in at least one other session
+        # check conf sessions for same speaker in multiple sessions
+        count = 0
+        speaker_sessions = []
         for session in sessions:
             if session.speaker == curr_speaker:
-                # use conf id as speaker key
-                memcache.set(websafeConfKey, curr_speaker)
+                count = count + 1
+                speaker_sessions.append(session.sessionName)
 
-        return curr_speaker
+        if count > 1:
+            # use conf id as featured speaker key
+            memcache.set(websafeConfKey, (curr_speaker, speaker_sessions))
+
+        return True
 
 
     @endpoints.method(CONF_GET_REQUEST, StringMessage,
@@ -649,10 +665,17 @@ class ConferenceApi(remote.Service):
         del data['websafeConferenceKey']
         del data['websafeKey']
 
+        if not data['sessionName']:
+            raise endpoints.UnauthorizedException(
+                'Need Session Name to create session')
+
+        if not data['speaker']:
+            raise endpoints.UnauthorizedException(
+                'Need Session speaker to create session')
+
         s_id = Session.allocate_ids(size=1, parent=confKey)[0]
         s_key = ndb.Key(Session, s_id, parent=confKey)
         data['key'] = s_key
-        data['conf_id'] = request.websafeConferenceKey  
 
         if data['start_time']:
             data['start_time'] = datetime.strptime(data['start_time'], "%H:%M").time()
@@ -660,16 +683,16 @@ class ConferenceApi(remote.Service):
         if data['date']:
             data['date'] = datetime.strptime(data['startDate'][:10], "%Y-%m-%d").date()
 
-        Session(**data).put()
+        session = Session(**data)
+        session.put()
 
         speaker = data['speaker']
-        if speaker:
-            #Task Queue add to Featured Speaker
-            taskqueue.add(params={'speaker': speaker,
-            'websafeKey': request.websafeConferenceKey},
-            url='/tasks/add_new_speaker'
+        #Task Queue add to Featured Speaker
+        taskqueue.add(params={'speaker': speaker,
+        'websafeKey': request.websafeConferenceKey},
+        url='/tasks/add_new_speaker'
         )
-        return request
+        return self._copySessionToForm(session) 
 
 
     @endpoints.method(SESS_GET_REQUEST, SessionForms,
@@ -697,7 +720,7 @@ class ConferenceApi(remote.Service):
         """ Given a speaker, return all sessions given by this particular speaker,
         across all conferences """
 
-        sessions = Session.query(Session.speaker==request.speaker)
+        sessions = Session.query(Session.speaker == request.speaker)
         
         return SessionForms(
             items=[self._copySessionToForm(session) for session in sessions]
@@ -710,7 +733,6 @@ class ConferenceApi(remote.Service):
         retval = None
         prof = self._getProfileFromUser() # get user Profile
 
-        # check if conf exists given websafeConfKey
         # get session; check that it exists
         wsck = request.SessionKey
         session = ndb.Key(urlsafe=wsck).get()
@@ -741,7 +763,6 @@ class ConferenceApi(remote.Service):
 
         # write things back to the datastore & return
         prof.put()
-        session.put()
         return BooleanMessage(data=retval)
 
 
@@ -781,52 +802,48 @@ class ConferenceApi(remote.Service):
         name='lateNonWorkshopQuery')
     def lateNonWorkshopQuery(self, request):
         """Get all non-workshop sessions starting after 7 pm"""
-        q1 = Session.query()
-        q1 = q1.filter(Session.typeOfSession != "workshop")
+        query1 = Session.query()
+        query1 = query1.filter(Session.typeOfSession != "workshop")
 
         comp_time = datetime.strptime('19', '%H').time()
-        q2 = Session.query().filter(Session.start_time > comp_time)
+        query2 = Session.query().filter(Session.start_time > comp_time)
 
         items = []
-        for s1 in q1:
-            for s2 in q2:
-                if s1 == s2:
-                    items.append(self._copySessionToForm(s1))
+        for session1 in query1:
+            for session2 in query2:
+                if session1 == session2:
+                    items.append(self._copySessionToForm(session1))
         return SessionForms(items=items)
 
 
-    @endpoints.method(message_types.VoidMessage, SessionForms,
-        path = 'earlyNonBobQuery', http_method='GET', name='earlyNonBobQuery')
-    def earlyNonBobQuery(self, request):
-        """Get all non-bob speaker sessions starting before 2pm"""
-        q1 = Session.query()
-        q1 = q1.filter(Session.speaker != "Bob")
-        comp_time = datetime.strptime('14', '%H').time()
-        q2 = Session.query().filter(Session.start_time < comp_time)
+    @endpoints.method(SPECIAL_QUERY1_REQUEST, SessionForms,
+        path = 'specialquery1', http_method='GET', name='specialquery1')
+    def specialquery1(self, request):
+        """Get all afternoon sessions of given speaker"""
+        query1 = Session.query()
+        query1 = query1.filter(Session.speaker == request.speaker)
+        comp_time = datetime.strptime('12', '%H').time()
+        query1 = Session.query().filter(Session.start_time > comp_time)
+        sessions = query1.get()
 
-        items = []
-        for s1 in q1:
-            for s2 in q2:
-                if s1 == s2:
-                    items.append(self._copySessionToForm(s1))
-        return SessionForms(items=items)
+        return SessionForms(
+            items=[self._copySessionToForm(session) for session in sessions]
+        )
 
 
-    @endpoints.method(message_types.VoidMessage, SessionForms,
-        path = 'nonTimeAndNonSpeakerJoeQuery', http_method='GET', 
-        name='nonTimeAndNonSpeakerJoe')
-    def nonTimeAndNonSpeakerJoe(self, request):
-        """Get all sessions not named time and not by Speaker Joe"""
-        q1 = Session.query()
-        q1 = q1.filter(Session.sessionName != "Time")
-        q2 = Session.query().filter(Session.speaker != "Speaker Joe")
+    @endpoints.method(SPECIAL_QUERY2_REQUEST, SessionForms,
+        path = 'specialquery2', http_method='GET', 
+        name='specialquery2')
+    def specialquery2(self, request):
+        """Get all morning sessions of a particular session type."""
+        query1= Session.query()
+        query1= query1.filter(Session.typeOfSession == request.typeOfSession)
+        comp_time = datetime.strptime('12', '%H').time()
+        query1 = Session.query1.filter(Session.start_time < comp_time)
+        sessions = query1.get()
 
-        items = []
-        for s1 in q1:
-            for s2 in q2:
-                if s1 == s2:
-                    items.append(self._copySessionToForm(s1))
-        return SessionForms(items=items)
-
+        return SessionForms(
+            items=[self._copySessionToForm(session) for session in sessions]
+        )
 
 api = endpoints.api_server([ConferenceApi]) # register API

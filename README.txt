@@ -37,8 +37,19 @@ You can also create your own googe project with a new app id to then
 place in the app.yaml file. Then you can deploy to App Engine for
 testing and using the site.
 
-
 -------------------------------------------------------------------
+
+Design Choices:
+
+Sessions are implented as a GDB model. The speaker is implented as
+a string property of that model. This was done because no sub-
+elements of the speaker are needed for the use of the site. By 
+keeping the speaker as just a propoerty of the Session model, this
+simplifies the structure and avoids unnecessary code. In future
+versions if more speaker data was required, such as a speaker
+profile, then a speaker model could be created. 
+
+Extra Queries -
 
 As part of the assignment I created extra queries, particularly
 to get non-workshop sessions after 7pm. This was a little tricky

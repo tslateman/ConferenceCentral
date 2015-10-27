@@ -119,7 +119,6 @@ class Session(ndb.Model):
     typeOfSession           = ndb.StringProperty()
     date                    = ndb.DateProperty()
     start_time              = ndb.TimeProperty()
-    conf_id                 = ndb.StringProperty()
 
 class SessionForm(messages.Message):
     """SessionForm -- Session outbound form message"""
