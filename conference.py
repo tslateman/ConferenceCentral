@@ -41,6 +41,7 @@ from models import TeeShirtSize
 from models import Session
 from models import SessionForm
 from models import SessionForms
+from models import PairMessage
 
 from utils import getUserId
 
@@ -88,7 +89,6 @@ CONF_POST_REQUEST = endpoints.ResourceContainer(
 SESS_POST_REQUEST = endpoints.ResourceContainer(
     SessionForm,
     websafeConferenceKey=messages.StringField(1),
-    SessionKey = messages.StringField(2)
 )
 
 SESS_GET_REQUEST = endpoints.ResourceContainer(
@@ -561,7 +561,6 @@ class ConferenceApi(remote.Service):
     def getAnnouncement(self, request):
         """Return Announcement from memcache."""
         # return an existing announcement from Memcache or an empty string.
-        # announcement = self._cacheAnnouncement()
         announcement = memcache.get(MEMCACHE_ANNOUNCEMENTS_KEY)
         if not announcement:
             announcement = ""
@@ -592,22 +591,26 @@ class ConferenceApi(remote.Service):
                 speaker_sessions.append(session.sessionName)
 
         if count > 1:
-            # use conf id as featured speaker key
-            memcache.set(websafeConfKey, (curr_speaker, speaker_sessions))
+            # use confkey as featured speaker key, speaker for sessions key
+            memcache.set(websafeConfKey, curr_speaker)
+            memcache.set(curr_speaker, speaker_sessions)
 
         return True
 
 
-    @endpoints.method(CONF_GET_REQUEST, StringMessage,
+    @endpoints.method(CONF_GET_REQUEST, PairMessage,
             path='conference/speaker/get',
             http_method='GET', name='getFeaturedSpeaker')
     def getFeaturedSpeaker(self, request):
-        """Return featured speaker from memcache."""
+        """Return featured speaker and sessions from memcache."""
 
         speaker = memcache.get(request.websafeConferenceKey)
         if not speaker:
             speaker = ""
-        return StringMessage(data=speaker)
+        speaker_sessions = str(memcache.get(speaker))
+        if not speaker_sessions:
+            speaker_sessions = ""
+        return PairMessage(data1=speaker, data2=speaker_sessions)
 
 
 # - - - Sessions - - - - - - - - - - - - - - - - - - - -
@@ -646,7 +649,7 @@ class ConferenceApi(remote.Service):
         return sform
 
 
-    @endpoints.method(SessionForm, SessionForm, path='session', 
+    @endpoints.method(SESS_POST_REQUEST, SessionForm, path='session', 
             http_method='POST', name='createSession')
     def createSession(self, request):
         """Creates a session for a conference. 
@@ -802,17 +805,14 @@ class ConferenceApi(remote.Service):
         name='lateNonWorkshopQuery')
     def lateNonWorkshopQuery(self, request):
         """Get all non-workshop sessions starting after 7 pm"""
-        query1 = Session.query()
-        query1 = query1.filter(Session.typeOfSession != "workshop")
-
+      
         comp_time = datetime.strptime('19', '%H').time()
-        query2 = Session.query().filter(Session.start_time > comp_time)
-
+        query = Session.query().filter(Session.start_time > comp_time)
+        
         items = []
-        for session1 in query1:
-            for session2 in query2:
-                if session1 == session2:
-                    items.append(self._copySessionToForm(session1))
+        for session in query:
+            if session.typeOfSession != "workshop":
+                items.append(self._copySessionToForm(session))
         return SessionForms(items=items)
 
 
@@ -820,11 +820,10 @@ class ConferenceApi(remote.Service):
         path = 'specialquery1', http_method='GET', name='specialquery1')
     def specialquery1(self, request):
         """Get all afternoon sessions of given speaker"""
-        query1 = Session.query()
-        query1 = query1.filter(Session.speaker == request.speaker)
+        query = Session.query()
+        query = query.filter(Session.speaker == request.speaker)
         comp_time = datetime.strptime('12', '%H').time()
-        query1 = Session.query().filter(Session.start_time > comp_time)
-        sessions = query1.get()
+        sessions = query.filter(Session.start_time > comp_time)
 
         return SessionForms(
             items=[self._copySessionToForm(session) for session in sessions]
@@ -836,11 +835,10 @@ class ConferenceApi(remote.Service):
         name='specialquery2')
     def specialquery2(self, request):
         """Get all morning sessions of a particular session type."""
-        query1= Session.query()
-        query1= query1.filter(Session.typeOfSession == request.typeOfSession)
+        query= Session.query()
+        query= query.filter(Session.typeOfSession == request.typeOfSession)
         comp_time = datetime.strptime('12', '%H').time()
-        query1 = Session.query1.filter(Session.start_time < comp_time)
-        sessions = query1.get()
+        sessions = query.filter(Session.start_time < comp_time)
 
         return SessionForms(
             items=[self._copySessionToForm(session) for session in sessions]

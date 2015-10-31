@@ -57,10 +57,24 @@ for two reaons. For one, the datetime objects of NDB do not
 behave like the datetime objects in python, so there's some
 adjustments that have to be made there. Second, we cannot directly
 group inequalities into one query for Google's datastore. This is
-a limitation that comes with the faster queries. To get around
-this limitation the queries are run separately and then the code
-iterates through each to identify overlaps to then save to the
-list of sessions to return.
+a limitation that comes with the faster queries. 
+
+To get around this limitation the queries are run separately,
+pulling the sessions after 7pm with the NDB filter and checking
+for non-workshop within the python code with an if statement
+while looping through the query and saving just the desired
+sessions to a list of sessions to return.
+
+Special Query 1 takes a given speaker from user input and 
+returns all the afternoon sessions from that speaker. For 
+those attendees that are interested in someone, but not so
+much that they want to get out of bed early.
+
+Special Query 2 takes a sesssion type and then queries for 
+all AM sessions of that type. This is for the opposite 
+type of conference attendee that enjoys waking up early
+Also, rather than focusing on the speaker, this slices
+the data by the type of session.
 
 -------------------------------------------------------------------
 

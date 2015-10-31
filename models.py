@@ -110,6 +110,11 @@ class StringMessage(messages.Message):
     """StringMessage-- outbound (single) string message"""
     data = messages.StringField(1, required=True)
 
+class PairMessage(messages.Message):
+    """PairMessage-- outbound two string message"""
+    data1 = messages.StringField(1, required=True)
+    data2 = messages.StringField(2, required=True)
+
 class Session(ndb.Model):
     """Session -- Conference session object"""
     sessionName             = ndb.StringProperty(required=True)
@@ -129,9 +134,8 @@ class SessionForm(messages.Message):
     typeOfSession           = messages.StringField(5)
     date                    = messages.StringField(6)
     start_time              = messages.StringField(7)
-    conf_id                 = messages.StringField(8)
-    websafeConferenceKey    = messages.StringField(9)
-    websafeKey              = messages.StringField(10)
+    websafeConferenceKey    = messages.StringField(8)
+    websafeKey              = messages.StringField(9)
 
 class SessionForms(messages.Message):
     """SessionForms -- multiple Session outbound form message"""
